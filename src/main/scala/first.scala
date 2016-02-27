@@ -5,5 +5,5 @@ import org.apache.spark.SparkConf
   */
 class first {
   val conf = new SparkConf().setMaster("local")
-
+   val sc =new SparkContext(conf)
 }
