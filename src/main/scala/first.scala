@@ -6,4 +6,6 @@ import org.apache.spark.SparkConf
 class first {
   val conf = new SparkConf().setMaster("local")
    val sc =new SparkContext(conf)
+   val data = sc.parallelize(List(1,2,3,4))
 }
+
