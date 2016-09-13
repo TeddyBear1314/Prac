@@ -1,0 +1,37 @@
+﻿1）append a file content in a remote file:
+cat input.txt | ssh hostname 'cat >> output.txt'
+或者
+echo 'Your text' | ssh hostname 'cat >> output.txt'
+
+2）使用pscp:
+pscp -h hosts -r local-dir remote-dir
+
+3）增加新用户：
+useradd huangzhi
+vim /etc/sudoers
+huangzhi	ALL=(ALL)	NOPASSWD:ALL
+
+4）改变所有文件的用户组：
+chown -R huangzhi:DP .
+chgrp -R DP .
+
+5)sudo报have the setuid bit set:
+chown root:root /usr/bin/sudo
+chmod 4755 /usr/bin/sudo
+
+6）后台运行：
+command & : 关闭终端停止
+nohup command & : 关闭终端也继续运行
+
+bg 1 ： 把1调度到后台
+fg 1 : 把1调度到前台
+jobs:查看正在运行的linux job
+
+7）yum 需要export http_proxy, 然后更改/etc/repo.d下的文件
+  apt镜像在/etc/apt/source.list
+
+8) suppress command output:
+2>&1 > /dev/null
+
+按文件名排序文件:
+sort filename 

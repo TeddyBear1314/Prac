@@ -1,0 +1,16 @@
+﻿hdfs格式化namenode
+hadoop-2.6.0/bin/hdfs namenode -format
+
+注意查看hadoop version!!!
+
+一定要把生成好的jar放在${HADOOP_HOME}/share/hadoop/common/lib下，这样才能被每个worker找到
+
+hadoop job -list
+
+hadoop job -kill job-id
+
+单独启动datanode：sbin/hadoop-daemons.sh start datanode
+
+单独启动nodemanager：yarn-daemon.sh start nodemanager
+
+hdfs在mount磁盘时可以设置noatime属性

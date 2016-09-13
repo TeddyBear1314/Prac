@@ -1,0 +1,2 @@
+﻿java运行指定jar的指定类:
+java -cp ..jar Class

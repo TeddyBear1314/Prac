@@ -1,0 +1,86 @@
+﻿Assert:
+assertThat("albumen",both(containsString("a")).and(containsString("b")))
+assertThat(Arrays.asList("one","two","three"),hasItems("one","two"))
+assertThat(Arrays.asList(new String[]{"fun","ban","net"}),everyItem(containsString("n")))
+
+控制台运行：
+JUnitCore.runClasses(TestClass1.class,...)
+或者
+JUnitCore TestClass1 [...]
+
+@RunWith(Suite.class)
+@Suite.SuiteClasses({
+TestLogin.class,
+TestLogout.class,
+TestNavigate.class,
+TestUpdate.class
+})
+
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+...  class ...
+
+@Test(expected = IndexOutOfBoundsException.class)
+public void empty() {
+   new ArrayList<Object>().get(0);
+}
+
+@Rule
+public ExpectedException thrown = ExpectedException.none();
+
+@Test
+public void shouldTestExceptionMessage() throws IndexOutOfBoundsException {
+   List<Object> list = new ArrayList<Object>();
+
+   thrown.expect(IndexOutOfBoundsException.class);
+   thrown.expectMessage("Index: 0, Size: 0");
+   list.get(0);   
+}
+或者
+thrown.expectMessage(JUnitMachers.containsString("Size: 0"));
+
+assertThat(x, is(3));
+assertThat(s, is(not(4)));
+assertThat(responseString, either(containsString("color")).or(containsString("color")));
+assertThat(myList, hasItem("3"));
+assertThat(responseString, anyOf(containsString("color") || containString("colour")));
+简单来说，
+assertThat([value], [matcher statement]);
+
+Combination:
+not(s),
+either(s).or(t),
+each(s),
+
+import static导入静态对象，这样可以直接使用静态方法。
+
+
+@Ignore("Test is ignored as a demonstration")
+@Test
+
+@Test(timeout = 1000)
+
+使用更多jar:
+导入hamcrest-core.jar和hamcrest-library.jar
+
+改变测试顺序:在测试类前面添加@FixMethodOrder
+(MethodSorters.DEFAULT)(MethodSorters.JVM)(MethodSorters.NAME_ASCENDING)
+... class
+
+@RunWith(Suite.class)
+@SuiteClasses({
+    TestCase01.class,
+TestCase02.class,
+TestCase03.class
+})
+
+both(containsString("a")).and(containsString("b"));
+hasItems("one", "three");
+everyItem(containsString("n"));
+allOf(equalTo("good"), startsWith("good"));
+not(allOf(equalTo("bad"),equalTo("good")));
+anyOf()
+CombinableMatcher.<Integer>either(equalTo(3)).or(equalTo(4));
+not(sameInstance(new Object()));
+
+回归测试：修改旧代码后，重新进行测试以确认修改没有引入新的错误。
+

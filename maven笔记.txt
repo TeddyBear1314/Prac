@@ -1,0 +1,12 @@
+﻿将常用jar从中央仓库下载到本地仓库：
+mvn help:system
+
+maven的settings.xml可以设置localRepository
+
+maven项目在根目录下生成javadoc:
+mvn javadoc:javadoc
+mvn javadoc:aggregate
+
+maven命令里使用socks做代理:
+mvn package -DsocksProxyHost=child-prc.intel.com -DsocksProxyPort=913 -DskipTests=true
+

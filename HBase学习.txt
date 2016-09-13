@@ -1,0 +1,594 @@
+﻿这篇博客里有hbase出现性能问题的解决方案:
+http://www.cnblogs.com/DeeFOX/p/3287187.html
+
+hbase里需要配置：
+<property>
+  <name>hbase.zookeeper.property.dataDir</name>
+  <value>/home/huangzhi/zookeeper</value>
+</property>
+
+hbase rootdir不要事先配置，不然会出现migration
+
+hbase shell put:
+put 'test','row1','cf:a','value1'
+
+get:
+get 'test','row1'
+
+enable 'test'
+退出hbase shell:
+quit
+
+使用local-master-backup.sh启动后备HMaster
+参数是端口偏移:
+bin/local-master-backup.sh 2 3 5
+
+HMaster使用3个端口：
+16010,16020,16030
+
+获取后备pid偏移为1的并kill:
+cat /tmp/hbase-testuser-1-master.pid | xargs kill -9
+
+RegionServers的默认端口是16020和16030
+
+HBase1.0.0之后HMaster也是RegionServer
+
+运行多个RegionServer：
+bin/local-regionservers.sh start 2 3 5
+
+关闭local regionservers:
+bin/local-regionservers.sh stop 3
+
+在conf/下创建新文件backup-masters,里面填backup master的主机名
+
+1.0.0HBase之后HMaster的web port为16010，RegionServer的web port为16030
+
+所有节点的conf/必须sync
+
+regionservers里可以是主机名或者ip，如果localhost每台机器的Localhost有regionserver
+
+check for well-fomedness and only print output if errors exist:
+xmllint -noout filename.xml
+
+配置修改完需要重启，除非是动态配置。
+
+ssh是在集群节点间通信的手段。
+
+ulimit -n:查看用户可以一次性打开的文件数量，hbase至少10240
+
+
+ulimit -u:查看进程数量
+
+nproc:number of CPUs
+
+ulimit -u太低会导致OutOfMemory
+
+ubuntu设置ulimit:
+/etc/security/limits.conf:
+huangzhi	-	nofile	32768：同时设置软链和硬链的数量都是32768
+huangzhi	-	noproc	32000:设置进程的数量
+上面的设置需要生效，必须PAM environment使用：
+/etc/pam.d/common-session中包含：  或者： /etc/pam.d/login
+session	required pam_limits.so          session required /lib/security/pamlimits.so
+
+hadoop的short-circuit read提升HBase ramdom read profile
+
+如果担心版本mismatch：将hbase/lib下的hadoop jar换成你自己的版本。
+
+HBase proto:到HBase root dir:
+protoc -I src/main/protobuf -java_out=src/main/java src/main/protobuf/hbase.proto
+protoc -I src/main/protobuf -java_out=src/main/java src/main/protobuf/ErrorHandling.proto
+
+build against hadoop 2
+mvn clean install assembly:single -Dhadoop.version=2.7.1 -Phadoop-2.0 -DskipTests
+
+recompile code using the specific maven profile(top level pom.xml)
+
+HBase MTTR
+
+只有HDFS有sync实现HBase才不会丢失数据
+
+sync显示指定通过dfs.support.append=true在client side:hbase-site.xml和server side:hdfs-site.xml:
+<property>
+  <name>dfs.support.append</name>
+  <value>true</value>
+</property>
+
+文件数有上限:不设置有奇怪的错误：如DFSClient：Could not obtain block
+<property>
+ <name>dfs.datanode.max.transfer.threads</name>
+ <value>4096</value>
+</property>
+
+完全分布式只能run在hdfs上
+
+让HBase看到HDFS client的配置：
+1、在hbase-env.sh中HBASE_CLASSPATH指向HADOOP_CONF_DIR
+2、add a copy of hdfs-site.xml 或symlink 在${HBASE_HOME}/conf
+如果只是一小部分改变，可以直接添加在hbase-site.xml中
+
+hbase.tmp.dir
+本地文件系统的临时目录
+
+hbase.fs.tmp.dir
+底层文件系统的临时目录
+
+hbase.bulkload.staging.dir
+底层文件系统bulk loading的dir
+
+hbase.local.dir
+作为本地存储使用
+
+hbase.master.port:
+默认16000
+
+hbase.master.info.port:
+默认为16010，如果不想用webUI设置为-1
+
+hbase.master.info.bindAddress
+0.0.0.0
+
+hbase.master.logcleaner.plugins
+TimeToLiveLogCleaner
+
+hbase.master.logcleaner.ttl
+600 000:a WAL can stay in .oldlogdir
+
+hbase.master.hfilecleaner.plugins
+TimeToLiveHFileCleaner
+
+hbase.master.infoserver.redirect
+true
+
+hbase.regionserver.port
+16020
+hbase.regionserver.info.port
+16030
+
+hbase.regionserver.info.bindAddress
+0.0.0.0
+
+hbase.zookeeper.useMulti
+让一些zookeeper操作更快，避免一些副本错误。
+（一定要是3.4+）
+
+hbase.zookeeper.property.initLimit
+ticks that the initial synchronization can take
+
+hbase.zookeeper.property.syncLimit
+ticks that can pass between sending a request and getting an acknowledgement
+
+hbase.zookeeper.property.dataDir
+存储snapshot的位置
+
+hbase.zookeeper.property.clientPort
+
+hbase.zookeeper.property.maxClientCnxns
+并发连接（socket级别）一个client(根据IP)可以和 zookeeper ensemble连接的数量
+
+hbase.client.write.buffer
+同时占用client和server的内存，因为server实例化传过来的write buffer。更大的缓存减少rpc的次数。
+server内存使用= client.write.buffer * regionserver.handler.count
+
+hbase.client.pause:
+wait before running a retry of a failed get,lookup.
+
+hbase.client.retries.number
+initial backoff 配合 backoff policy
+
+hbase.client.max.total.tasks
+一个single HTable上可以并发的任务最大数量。
+
+hbase.client.max.perserver.tasks
+HTable instance send to a single region server
+
+hbase.client.max.perregion.tasks
+client连接到单个Region
+
+hbase.client.scanner.caching
+行数
+
+hbase.client.keyvalue.maxsize
+一个数据的size
+
+hbase.client.scanner.timeout.period
+
+hbase.hregion.max.filesize
+超过这个大小会分成两个
+
+hbase.hregion.majorcompaction
+major compaction之间的时间
+
+hbase meta blocks:INDEX and BLOOM
+
+必须是1024的整数倍，不然IOException：。。。magic
+
+inline blocks?compound Bloom filter?
+
+HBase使用ping来check connections
+
+改变hbase-env.sh需要重启集群
+改变log4j.proerties需要重启
+运行在standalone模式不需要配置客户端，因为都是在一台机器上
+
+集群模式下配置hbase-site.xml，客户端通过CLASSPATH获得。
+
+配置一个IDE运行HBase Client，将conf/目录放在classpath，
+需要的jar：
+commons-lang
+commons-configuration
+commons-logging
+hadoop-core
+hbase
+log4j
+slf4j-api
+slf4j-log4j
+zookeeper
+
+HBaseConfiguration.create():首先hbase-site.xml,
+代码里设置：
+config.set("","");
+
+zookeeper的数据持久化在...,就是这只hbase.zookeeper.property.dataDir,存放snapshot
+
+rootdir是由很多RegionServers共享的。
+
+export HBASE_HEAPSIZE=4G
+
+第一个check in的regionserver会分配所有的region。更改：hbase.master.wait.on.regionservers.mintostarts,默认是1
+
+不同步升级client和server
+
+升级server，向下兼容client的API
+
+不同版本的server可以在cluster共存
+
+有线协议在应用层描述信息
+
+worker的replication和log splitting可以同时进行
+
+独立的协议（zookeeper协调）不会变
+
+用户可以rolling update： a graceful stop each server,update the software,and restart:先master再RegionServers
+
+L1 LruBlockCache using hfile.block.cache.size
+
+WAL threading model,reserve scanner,MapReduce over snapshot files,striped compaction?
+
+how to compact a region?
+
+启动hbase管理的zookeeper：
+./hbase/bin/hbase-daemon.sh start zookeeper
+
+namesapce 需要重排序 directories
+
+写znode的格式是protobuf
+
+META使用protocol buffers
+
+log splitting现在是整个集群做
+
+online schema alter facility
+
+multi-slave and multi-master:collisions are handled at the timestamp level
+
+bin/hbase org.jruby.Main PATH_TO_SCRIPT
+
+pass -n:non-interactive
+
+csh:C-style shell
+
+HBASE_SHELL_OPTS="-verbose:gc -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCDateStamps \
+                            -XX:+PrintGCDetails -Xloggc:$HBASE_HOME/logs/gc-hbase.log" ./bin/hbase shell
+
+
+jruby shell:
+t = create 't','f'
+t.put 'r','f','v'
+t.scan
+t.describe
+t.disable
+t.drop
+
+如果没写：
+tab = get_table 't'
+
+预先分片：
+create 't1','f',SPLITS=>['10','20','30']
+
+create 't1','f',SPLITS_FILE=>'splits.txt'
+
+按算法：
+create 't2','f',{NUMREGIONS => 4,SPLITALGO => 'UniformSplit'}
+
+DEBUG:
+debug 回车
+或者
+bin/hbase shell -d
+
+count可以加CACHE
+
+column family出于性能原因
+column qualifier:提供index
+
+hbase开kerberos，底下的文件系统也必须开启，否则没用
+
+Client-side Configuration for Thrift Gateway
+<property>
+ <name>hbase.thrift.keytab.file</name>
+ <value>/etc/hbase/conf/hbase.keytab</value>
+</property>
+<property>
+ <name>hbase.thrift.kerberos.principal</name>
+ <value>$USER/_HOST@HADOOP.LOCALDOMAIN</value>
+</property>
+
+> grant 'thrift_server', 'RWCA'
+
+安全的Hbase需要安全的ZooKeeper和HDFS。
+
+hbase shell可以输入whoami
+
+> grant 'user', 'RWXCA', 'TABLE', 'CF', 'CQ'
+
+public static void grantOnTable(final HBaseTestingUtility util, final String user, final TableName table, final byte[] family, final byte[] qualifier, final Permission.Action... actions) throws Exception {
+{
+SecureTestUtil.updateACLs(util, new Callable<Void>(){
+@override
+public Void call() throws Exception)
+
+> add_labels ['admin', 'service', 'developer', 'test']
+
+strongly consistent read/write
+
+automatic sharding
+
+automatic RegionServer failover
+
+Block Cache and Bloom Filters:for high volume query optimization
+
+网页支持操作的记录和metrics
+
+catalog table:hbase:meta
+
+hbase:meta 现在保存在zookeeper中。
+
+[.META.,,1]  info:regioninfo info:server info
+
+hbase:meta
+[table],[region start key],[region id]
+info:regioninfo
+info:server
+info:serverstartcode
+
+当表在split时，创建2个新column：info:splitA和info：splitB
+
+buffered writes:use BufferedMutator
+
+Table需要close(),至少flushCommits()
+
+FilterList list = new FilterList(FilterList.Operator.MUST_PASS_ONE);
+SingleColumnValueFilter filter1 = new SingleColumnValueFilter(
+cf,
+column,
+CompareOp.EQUAL,
+Bytes.toBytes("my value")
+)
+
+master后台线程：
+LoadBalancer
+CatalogJanitor
+HMaster和Master一起，HRegionServer和Worker一起
+
+HRegionServer后台线程：
+CompactSplitThread
+MajorCompactionChecker
+MemStoreFlusher
+LogRoller
+
+default on-heap LruBlockCache
+off-heap BucketCache
+
+hbase.block.data.cachecompressed = true
+
+memstore: in-memory storage system,一旦满了，内容写入磁盘作为追加的store files：memstore flush，
+store files会变多，compact into larger files.完成之一，数据的数量会改变。这时会咨询split policy。policy可以就会将split request压入队列。
+子region创建符号链接文件，叫Reference files，指向父store的对应part，该region在没有更多引用指向父分片的不可变data files时可以被split，这些reference files在compact时慢慢被删除，这样又可以被split。
+split是RegionServer的本地决定，但是需要与很多因素协调。RegionServer在split之前和之后通知Master。更新.META.表，这样client才能知道子分片的存在，重新排列目录结构，和HDFS里的data files。splitting是多任务进程。
+为了能发生错误时进行回滚，RegionServer保存一个内存的日志关于执行状态，有RegionServer Split Process记录步骤，每个步骤有步骤号。
+start split transaction,RegionServer acquire a sahred read lock on the table to prevent schema modifications during the process. then creates a znode in zookeeper under /hbase/region-in-the-transition/region-name, and sets the znode's state to SPLITTING.
+Master在region-in-transition上有监听器。
+regionserver创建子目录.splits在region下HDFS。
+open daughter in parallel
+
+WAL:record all changes, to file-based storage.正常情况下，WAL不会需要，因为数据从MemStore到StoreFile.
+但RegionServer crashes,或在MemStore flush时unavailable，the WAL确保这些改变可以被replay，如果write to WAL fails,整个操作fail
+HBase使用WAL接口。每个RegionServer只有一个WAL，RegionServer记录了Put和Delete，在到MemStore前。
+
+一个regionserver一个WAL会造成bottleneck。
+1.0引入MultiWal,并行写多个WAL流，在HDFS instance使用多个pipeline。按Region分片，所以不会提高单个region的性能。
+
+hbase.wal.provider=multiwal
+
+取消的话删除这一行，重启regionserver
+
+grouping the WAL edits called log splitting,由HMaster完成，在cluser启动时，在RegionServer shutdown时由Handler完成。可以保证一致性，受影响的region直到数据恢复才能available。
+
+/hbase/WALs/<host>,<port>，<startcode> 目录重命名
+每个log文件split，一次一个。每次读入一行，放到一个region对应的buffer中。splitter开启多个写线程，写线程找到对应的buffer，写到临时的恢复的edit file：/hbase/<table_name>/<region_id>/recovered.edits/.temp
+写完了将.temp重命名为first log的sequence ID
+
+确认所有的edits被写入了，
+
+log splitting完成，每个受影响的region被分配到regionserver.
+
+region重新打开，replay，将MemStore的内容写入HFile
+
+hbse.hlog.split.skip.errors = true：
+记录所有的error，
+出问题的WAL log被移进.corrupt目录
+
+true的话，传播异常。logged as failed
+
+WAL disabled : Mutation.writeWAL(false)
+
+Regions are composed of a Store per Column Family
+
+region count low:
+1.MSLAB(MemStore-local allucation buffer)需要2MB每个MemStore
+
+Master invokes the AssignmentManager
+
+> merge_region 'ENCODED_REGIONNAME', 'ENCODED_REGIONNAME', true
+
+only adjacent regions can be merged
+
+查看HFile的文本形式：
+bin/hbase org.apache.hadoop.hbase.io.hfile.HFile -v -f hdfs://10.81.47.41:9000/hbase/TEST/62134783210/DSMP/632194887431
+
+StoreFiles are composed of blocks.blocksize per-ColumnFamily basis.Compression happens at the block level
+
+StoreFile is a facade of HFile
+
+Testing MOB:
+sudo -u hbase org.apache.hadoop.hbase.IntegrationTestIngestMOB -threshols 102400  -minMobDataSize 512 -maxMobDataSize 5120
+
+>compact_mob 't1'
+
+>major_compact_mob 't1', 'c1'
+
+# Foreground
+$ bin/hbase rest start -p <port>
+
+#Background
+$bin/hbase-daemon.sh start rest -p <port>
+                     stop
+
+每个RegionServer是一个DFSClient，相关配置可以在hbase-site.xml中配置
+
+chapter103很重要
+
+rpc-level logging:org.apache.hadoop.ipc = DEBUG
+
+bin/hbase zkcli -server host:port <cmd> <args>
+./oldWALs: already processed WALs
+
+RegionServerHanging:
+Adding "-XX:+UseMember" to HBASE_OPTS in hbase-env.sh
+
+容错：比如太长和zookeeper断开连接，一个RegionServer挂了还能依靠其他分片服务，
+所以heap-size一定要够
+
+-Dhadoop.profile=2.0
+
+HFile和WAL：
+
+获取datalocality,在每一个worker上安装RegionServer。
+
+HBase uses DFSClient class
+
+Configuration可以在DFS的serverside,可以在DFS的clientside,可能都在。
+
+HDFS pipeline communications from one DataNode to the other。
+
+HBase communicates with DataNodes using ipc.Client interface and DataNode class.
+
+HBase不需要DFS的load balancer 
+
+至少hdfs2.7.1
+
+dfs.client.timeout = 60000
+dfs.datanode.socket.write.timeout = 480000
+
+bin/hbase canary table1 table2 ...
+
+bin/hbase canary -regionserver
+
+bin/hbase org.apache.hadoop.hbase.mapreduce.UtilityName 大大的有用
+
+bin/hbase hbck -details/-fix
+
+bin/hbase org.apache.hadoop.hbase.regionserver.wal.FSHLog --dump：get a textual dump  --split:force a split of a log file
+
+bin/hbase wal:WAL Pretty Printer
+
+hbase.quota.enabled
+
+mvn compile -Pcompile-protobuf -Dprotoc.path=/opt/local/bin/protoc
+
+mvn -Prelease
+
+mvn clean test -Dtest=TestZookeeper -PskipServerTests -PskipCommandTests -PskipIntegrationTests
+
+:After mvn install -DskipTests
+cd hbase-it
+mvn verify : runs integration tests
+/  mvn failsafe:integration-test:always BUILD_SUCCESS
+所以可以改为mvn failsafe:verify
+
+mvn test: only run small and medium tests
+
+mvn test -P runAllTests:  run small, medium and large
+
+mvn test -Dtest= myTest1,MyTest2  或者 mvn test '-Dtest=org.apache.hadoop.hbse.client.*'
+
+dev-support/hbasetests.sh 不写/runAllTests/replayFailed
+
+IntegrationTestDriver is used for executing the tests against a distributed cluster.only use IntegrationTestingUtility, HBaseCluster and public client API.
+
+run部分测试：
+mvn failsafe:integration-test -Dit.test=INtegrationTestClassXYZ,*ClassY*
+
+running against already-setup cluster:
+mvn test-compile
+bin/hbase [--config config_dir] org.apache.hadoop.hbase.IntegrationTestDriver [-h]
+
+以文本形式查看日志：
+> bin/hbase org.apache.hadoop.hbase.regionserver.wal.FSHLog 
+--dump alluxio://sr164:9000/hbase/WALs/sr236,16020,1470788057515/sr236%2C16020%2C1470788057515.1470788063970
+
+手动分割日志：
+> bin/hbase org.apache.hadoop.hbase.regionserver.wal.FSHLog  --split
+alluxio://sr164:9000/hbase/WALs/sr236,16020,1470788057515/sr236%2C16020%2C1470788057515.1470788063970
+
+WAL Pretty Printer
+Bin/hbase wal 
+
+在单节点停止regionserver
+bin/hbase-daemon.sh stop regionserver RegionServer
+
+单节点启动regionserver
+bin/hbase-daemon.sh start regionserver
+
+
+Hbase master not starting correctly：org.apache.hadoop.hbase.TableExistsException: hbase:namespace
+
+Step 1:stop Hbase.
+
+Step 2:run the follow command
+
+hbase org.apache.hadoop.hbase.util.hbck.OfflineMetaRepair
+This command is used to repair MetaData of Hbase
+
+Step 3:delete the data in zookeeper (WARNING It will make you lost you old data)
+
+./opt/cloudera/parcels/CDH-5.1.0-1.cdh5.1.0.p0.53/lib/zookeeper/bin/zkCli.sh
+you can use ls / to scan the data in zookeeper
+
+use rmr /hbase to delete the hbase's data in zookeeper
+Step4:删除文件系统对应的/hbase文件夹
+
+Step 4：Start hbase
+
+hbase shell:
+创建3个列族的表：
+create 'test','a','b','c'
+
+scp拷贝2个文件：
+scp a.txt b.txt destination
+
+hdfs拷贝2个文件：
+bin/hdfs dfs -copyFromLocal a.txt b.txt destination
+
+hadoop程序运行：
+bin/hadoop jar ../hbase/hbase-examples/target/hbase-examples-2.0.0-SNAPSHOT.jar org.apache.hadoop.hbase.mapreduce.SampleUploader hdfs://vsr119:9000/sampleupload/ test

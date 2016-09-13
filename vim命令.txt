@@ -1,0 +1,6 @@
+﻿vim删除文件所有内容：
+：%d
+
+vim同时打开2个窗口：
+vim -o file1 file2
+切换 ctrl+w+w
